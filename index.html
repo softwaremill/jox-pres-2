@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="dist/reset.css">
+		<link rel="stylesheet" href="dist/reveal.css">
+		<link rel="stylesheet" href="dist/theme/night.css">
+
+		<!-- Theme used for syntax highlighted code -->
+		<link rel="stylesheet" href="plugin/highlight/monokai.css">
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section data-markdown>
+					<textarea data-template>
+						```text
+						Loading ...
+						```
+						<!-- .element: style="text-align: center" -->
+
+						---
+
+						## Loom ∈ Java 21+
+
+						```java [|2,6]
+						timed(() -> {
+							var threads = new Thread[10_000_000];
+							var results = ConcurrentHashMap.newKeySet();
+							for (int i=0; i<threads.length; i++) {
+								threads[i] = Thread
+									.ofVirtual()
+									.start(() -> results.add(0));
+							}
+
+							for (Thread thread : threads) {
+								thread.join();
+							}
+							return null;
+						});
+						```
+						<!-- .element: class="fragment" -->
+
+						```
+						~2 seconds
+						```
+						<!-- .element: class="fragment" -->
+
+						---
+
+						## Akka streams
+
+						```java [|6|7|1-2,8-10|11|3-4,12|13|14]
+						var delayed =
+						  CompletableFuture.delayedExecutor(5L, TimeUnit.SECONDS);
+						var nats =
+						  Source.unfold(0, i -> Optional.of(Pair.create(i+1, i+1)));
+
+						Source.range(1, 100)
+						  .throttle(1, Duration.ofSeconds(1))
+						  .mapAsync(4, i -> CompletableFuture
+						    .supplyAsync(() -> i * 3, delayed)
+						    .thenApplyAsync(k -> k + 1))
+						  .filter(i -> i % 2 == 0)
+						  .zip(nats)
+						  .runForeach(System.out::println, system)
+						  .toCompletableFuture();
+						```
+
+						---
+
+						## The problem
+
+						Can we combine the developer experience:
+
+						* of virtual threads
+						* of "reactive" streaming libraries
+
+						while keeping the performance?
+						<!-- .element: class="fragment" -->
+
+						---
+
+						Who am I?
+
+						TODO
+
+						## Go-like channels for Java using Project Loom
+						<!-- .element: style="color: #42AFFAFF;" -->
+
+						### [Adam Warski](https://warski.org), [SoftwareMill](https://softwaremill.com), June 2024
+
+						---
+
+						<h2 class="r-fit-text">Part I: Virtual Threads</h2>
+
+						---
+
+						## Some history
+
+						* part of Project Loom
+						  * 2017: start
+						  * 2023: stable release in Java 21 (LTS)
+						  * 2025: final restrictions lifted in Java 24
+
+						---
+
+						> Virtual threads are lightweight threads that reduce the effort of writing,
+						maintaining, and debugging high-throughput concurrent applications.
+
+						from [Oracle's website](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html)
+
+						---
+
+						## But why?
+
+						* "traditional" threads are "heavy"
+						* Java used to have a synchronous model
+						* but, the web happened
+
+						---
+
+						## Before Loom: Scaling threads
+
+						Core idea: make sure threads are never idle
+
+						<div class="fragment">
+
+						* thread pools
+						* `Executor`
+						* `Future`, `CompletableFuture`
+
+						</div>
+
+						---
+
+						## In the old days
+
+						```java
+						var person = db.findById(id);
+
+						if (person.hasLicense()) {
+							bankingService.transferFunds(person, dealership, amount);
+							dealerService.reserveCar(person);
+						}
+						```
+
+						---
+
+						## More recently
+
+						```java
+						db.findById(id).thenCompose(person -> {
+							if (person.hasLicense()) {
+								return bankingService
+									.transferFunds(person, dealership, amount)
+									.thenCompose(transferResult ->
+										dealerService.reserveCar(person));
+							} else {
+								return CompletableFuture.completedFuture(null);
+							}
+						});
+						```
+
+						technical concerns > code readability
+						<!-- .element: class="fragment" -->
+
+						---
+
+						## Goals of Virtual Threads
+
+						* maintain thread utilization
+						* retain simplicity of synchronous code
+
+						---
+
+						## Goals of Virtual Threads
+
+						* reintroduce **direct syntax**
+						* eliminate **virality**
+						* eliminate **lost context**
+
+						---
+
+						#### Under the covers: Futures
+
+						<img src="img/001-futures.png" style="height: 600px;">
+
+						---
+						<!-- .element: data-transition="none" -->
+
+						#### Under the covers: Virtual Threads
+
+						<img src="img/002-vt.png" style="height: 600px;">
+
+						---
+
+						## In the new days
+
+						```java
+						var person = db.findById(id);
+
+						if (person.hasLicense()) {
+							bankingService.transferFunds(person, dealership, amount);
+							dealerService.reserveCar(person);
+						}
+						```
+
+						---
+
+						## Loom contributions
+
+						* runtime: scheduler
+						* API: virtual & platform threads
+						* retrofitting blocking APIs
+
+						---
+
+						<h2 class="r-fit-text">Part II: Reactive Streams</h2>
+
+						---
+
+						## Reactive Streams
+
+						> govern the exchange of stream data across an asynchronous boundary
+
+						> provide a standard for asynchronous stream processing with non-blocking back pressure
+
+						from [reactive-streams.org](https://www.reactive-streams.org)
+
+						---
+
+						## Reactive Streams
+
+						Process streaming data:
+						* efficiently utilize threads
+						* declarative concurrency
+						* interface with I/O operations
+						* safely handle errors
+
+						---
+
+						## Reactive Streams: bounded memory
+
+						<img src="img/003-backpressure.png">
+
+						---
+
+						## Akka streams
+
+						```java
+						var delayed =
+						  CompletableFuture.delayedExecutor(5L, TimeUnit.SECONDS);
+						var nats =
+						  Source.unfold(0, i -> Optional.of(Pair.create(i+1, i+1)));
+
+						Source.range(1, 100)
+						  .throttle(1, Duration.ofSeconds(1))
+						  .mapAsync(4, i -> CompletableFuture
+						    .supplyAsync(() -> i * 3, delayed)
+						    .thenApplyAsync(k -> k + 1))
+						  .filter(i -> i % 2 == 0)
+						  .zip(nats)
+						  .runForeach(System.out::println, system)
+						  .toCompletableFuture();
+						```
+
+						---
+
+						## How did we get here?
+
+						* working with `Future`s is complex
+						* high-level, FP-inspired API is better
+
+						---
+
+						## Reactive Streams & implementations
+
+						* `Publisher` / `Subscriber` - standard
+						* Akka/Pekko Streams, Vert.X, Helidon, RxJava, Reactor - implementations
+
+						---
+
+						## But ...
+
+						* `Future`s are viral
+						* "lifted" syntax: overhead
+						* lost context in case of errors
+
+						---
+
+						<h2 class="r-fit-text">Part III: Implementing simple streams</h2>
+
+						---
+
+						We'll take inspiration from:
+
+						<img src="img/kotlin.png" style="height: 100px;">
+						&nbsp;&nbsp;&nbsp;
+						<img src="img/gopher.png" style="height: 100px;">
+
+						---
+
+						## Jox: Channels & Flows
+
+						<img src="img/jox.png" style="height: 600px;">
+
+						---
+
+						## Assumptions
+
+						* built-in control flow
+						  * `for`, `if`, `while`, `try-catch-finally`
+
+						* composing operations using `;`
+						  * not `.thenCompose`
+
+						---
+
+						## Stages & emits
+
+						```java
+						public interface FlowStage<T> {
+							void run(FlowEmit<T> emit) throws Exception;
+						}
+
+						public interface FlowEmit<T> {
+							void apply(T t) throws Exception;
+						}
+						```
+
+						---
+
+						## Top-level flow
+
+						```java
+						public class Flow<T> {
+							final FlowStage<T> last;
+							// ...
+						}
+						```
+
+						---
+
+						## Example infinite stream
+
+						```java[|2-3|5|6-10]
+						public class Flows {
+							public static <T> Flow<T> iterate(T zero,
+															  Function<T, T> nextFn) {
+
+								return new Flow(emit -> {
+									T current = zero;
+									while (true) {
+										emit.apply(current);
+										current = nextFn.apply(current);
+									}
+								});
+							}
+						}
+						```
+
+						---
+
+						## Example consumer
+
+						```java
+						public class Flow<T> {
+							// ...
+
+							public List<T> runToList() throws Exception {
+								List<T> result = new ArrayList<>();
+								last.run(result::add);
+								return result;
+							}
+						}
+						```
+
+						---
+
+						## Example transformation
+
+						```java[|7|8|9]
+						public class Flow<T> {
+							// ...
+
+							public <U> Flow<U> map(
+								ThrowingFunction<T, U> mappingFunction) {
+
+								return new Flow<>(emit -> {
+									last.run(t ->
+										emit.apply(mappingFunction.apply(t)));
+								});
+							}
+						}
+						```
+
+						---
+
+						## Single-thread pipeline
+
+						```java
+						List<Integer> result = Flows
+							.iterate(1, i -> i + 1)
+							.map(i -> i*2)
+							.filter(i -> i%3 == 2)
+							.take(10)
+							.runToList();
+						```
+
+						---
+
+						<img src="img/004-flows.png" style="height: 600px;">
+
+						---
+
+						## Java Streams?
+
+						```java
+						List<Integer> result = Stream
+							.iterate(1, i -> i + 1)
+							.map(i -> i * 2)
+							.filter(i -> i % 3 == 2)
+							.limit(10)
+							.collect(Collectors.toList());
+						```
+
+						---
+
+						<h2 class="r-fit-text">Part IV: Asynchronous Infrastructure</h2>
+
+						---
+
+						## Communicating threads
+
+						* queues?
+						* channels!
+
+						---
+
+						## Channels
+
+						* queue interface
+						* completable
+						* Go-like select
+
+						---
+
+						<a href="https://arxiv.org/pdf/2211.04986"><img src="img/paper.png"></a>
+
+						---
+
+						```java
+						var ch = new Channel<Integer>(4);
+
+						ch.send(1);
+						ch.send(2);
+						System.out.println(ch.receive());
+						```
+
+						---
+
+						```java [|8]
+						var ch1 = new Channel<String>();
+						var ch2 = new Channel<String>();
+
+						Thread.ofVirtual().start(() -> { ch1.send("v1"); });
+						Thread.ofVirtual().start(() -> { ch2.send("v2"); });
+
+						System.out.println(
+						    select(ch1.receiveClause(), ch2.receiveClause())
+						);
+						```
+
+						---
+
+						```java
+						var ch = new Channel<String>(4);
+
+						ch.send("hello");
+						ch.done();
+
+						System.out.println("Received: " + ch.receiveOrClosed());
+						System.out.println("Received: " + ch.receiveOrClosed());
+						```
+
+						```text
+						Received: hello
+						Received: ChannelDone[]
+						```
+						<!-- .element: class="fragment" -->
+
+						---
+
+						## Managing threads
+
+						* using structured concurrency
+						* built on top of [JEP-453](https://openjdk.org/jeps/453)
+						  * in preview
+
+						---
+
+						```java[|1|3,8|13]
+						var result = supervised(scope -> {
+
+							var f1 = scope.fork(() -> {
+								Thread.sleep(500);
+								return 5;
+							});
+
+							var f2 = scope.fork(() -> {
+								Thread.sleep(1000);
+								return 6;
+							});
+
+							return f1.join() + f2.join();
+						});
+						```
+
+						---
+
+						```java[|5|14]
+						var result = supervised(scope -> {
+
+							var f1 = scope.fork(() -> {
+								Thread.sleep(500);
+								throw new RuntimeException("Giving up!");
+							});
+
+							var f2 = scope.fork(() -> {
+								Thread.sleep(1000);
+								return 6;
+							});
+
+							return f1.join() + f2.join();
+						});
+						```
+
+						---
+
+						## Structured concurrency
+
+						Syntactical structure of the code determines the lifetime of threads
+
+						Threading becomes an implementation detail!
+						<!-- .element: class="fragment" -->
+
+						---
+
+						<h2 class="r-fit-text">Part V: Asynchronous Streams</h2>
+
+						---
+
+						```java
+						public Flow<T> merge(Flow<T> other) {
+						  return new Flow<>(emit -> {
+							  supervised(scope -> {
+							    Channel<T> c1 = this.runToChannel(scope);
+								Channel<T> c2 = other.runToChannel(scope);
+
+								boolean continueLoop = true;
+								while (continueLoop) {
+								  switch (selectOrClosed(c1.receiveClause(),
+														 c2.receiveClause())) {
+									case ChannelDone _ -> continueLoop = false;
+									case ChannelError e -> throw e.toException();
+									case Object r -> emit.apply((T) r);
+						        }
+						}); }); } }
+						```
+
+						---
+
+						<img src="img/005-merge.png" style="height: 600px;">
+
+						---
+
+						```java [2|3|4-5|9-10|13]
+						public Flow<T> merge(Flow<T> other) {
+						  return new Flow<>(emit -> {
+							  supervised(scope -> {
+							    Channel<T> c1 = this.runToChannel(scope);
+								Channel<T> c2 = other.runToChannel(scope);
+
+								boolean continueLoop = true;
+								while (continueLoop) {
+								  switch (selectOrClosed(c1.receiveClause(),
+														 c2.receiveClause())) {
+									case ChannelDone _ -> continueLoop = false;
+									case ChannelError e -> throw e.toException();
+									case Object r -> emit.apply((T) r);
+						        }
+						}); }); } }
+						```
+
+						---
+
+						## Other operators
+
+						* `mapPar`
+						* `zip`
+						* `buffer`
+						* `grouped`
+						* ...
+
+						---
+
+
+
+					</textarea>
+				</section>
+
+				<section data-markdown>
+					<textarea data-template>
+						---
+
+						```java
+						public final class Channel<T> implements Source<T>, Sink<T> {
+							...
+						}
+						```
+
+						---
+
+						```java [1|3-4|5]
+						var ch = new Channel<Integer>(4);
+
+						ch.send(1);
+						ch.send(2);
+						System.out.println(ch.receive());
+						```
+
+						So far, a simple queue
+						<!-- .element: class="fragment" -->
+
+						---
+
+						```java [1-2|4-5|8]
+						var ch1 = new Channel<String>();
+						var ch2 = new Channel<String>();
+
+						Thread.ofVirtual().start(() -> { ch1.send("v1"); });
+						Thread.ofVirtual().start(() -> { ch2.send("v2"); });
+
+						System.out.println(
+						    select(ch1.receiveClause(), ch2.receiveClause())
+						);
+						```
+
+						---
+
+						```java [4-6|7-10]
+						var ch1 = new Channel<Integer>();
+						var ch2 = new Channel<Integer>();
+
+						Thread.ofVirtual().start(() -> { ch1.receive(); });
+						Thread.ofVirtual().start(() -> { ch2.receive(); });
+
+						var sent = select(
+						    ch1.sendClause(13, () -> "first"),
+						    ch2.sendClause(25, () -> "second")
+						);
+
+						System.out.println("Sent: " + sent);
+						```
+
+						---
+
+						```java
+						var ch = new Channel<String>(4);
+
+						ch.send("hello");
+						ch.done();
+
+						System.out.println("Received: " + ch.receiveOrClosed());
+						System.out.println("Received: " + ch.receiveOrClosed());
+						```
+
+						```text
+						Received: hello
+						Received: ChannelDone[]
+						```
+						<!-- .element: class="fragment" -->
+
+						---
+
+						```java
+						var ch = new Channel<String>(4);
+
+						ch.send("hello");
+						ch.error(new RuntimeException("error"));
+
+						System.out.println("Received: " + ch.receiveOrClosed());
+						System.out.println("Received: " + ch.receiveOrClosed());
+						```
+
+						```text
+						Received: ChannelError[cause=RuntimeException: error]
+						Received: ChannelError[cause=RuntimeException: error]
+						```
+						<!-- .element: class="fragment" -->
+					</textarea>
+				</section>
+
+				<section data-markdown>
+					<textarea data-template>
+						## But ... is this useful?
+
+						---
+
+						```java
+						public class WebSocket {
+							String receive()
+								throws IOException, WebSocketClosedException { ... }
+						}
+
+						public class Business {
+							void process(Source<String> s) { ... }
+						}
+						```
+
+						How to funnel a `WebSocket` to a `Channel`?
+
+						---
+
+						## Funnelling: producer
+
+						```java [1-12|5,8,10]
+						void wsToChannel(WebSocket ws, Channel<String> c)
+								throws InterruptedException {
+							try {
+								while (true) {
+									c.send(ws.receive());
+								}
+							} catch (IOException e) {
+								c.error(e);
+							} catch (WebSocketClosedException e) {
+								c.done();
+							}
+						}
+						```
+
+						---
+
+						## Funnelling: consumer
+
+						```java
+						void process(Source<String> s) throws InterruptedException {
+							var run = true;
+							while (run) {
+								switch (s.receiveOrClosed()) {
+									case ChannelDone()             -> { run = false; }
+									case ChannelError(Throwable t) -> { run = false; }
+									case String s -> { Thread.sleep(1000); }
+									default -> throw new IllegalStateException();
+								}
+							}
+						}
+						```
+
+						---
+
+						### Separate data & control channels
+
+						* many stock tickers, received via multiple WSs
+						* single channel to gather the data
+						* another channel to gather control data (WS errors, completion)
+
+						---
+
+						<img src="img/multi_tickers.png">
+
+						---
+
+						## Tickers: producer
+
+						```java [1-14|7,10,12]
+						void wsToChannel(String symbol, WebSocket ws,
+							Channel<String> prices,
+							Channel<TickerWebSocketEvent> control)
+								throws InterruptedException {
+							try {
+								while (true) {
+									prices.send(symbol + ": " + ws.receive());
+								}
+							} catch (IOException e) {
+								control.send(new TickerWebSocketError(symbol));
+							} catch (WebSocketClosedException e) {
+								control.send(new TickerWebSocketDone(symbol));
+							}
+						}
+						```
+
+						---
+
+						## Tickers: consumer
+
+						```java [1-15|5-6]
+						void consume(
+							Channel<String> prices,
+							Channel<TickerWebSocketEvent> control) {
+							while (true) {
+								switch (select(control.receiveClause(),
+											   prices.receiveClause())) {
+									case String p -> { Thread.sleep(1000); }
+									case TickerWebSocketDone d -> { /* ... */ }
+									case TickerWebSocketError e -> {
+										restart(e.symbol(), prices, control);
+									}
+									default -> throw new IllegalStateException();
+								}
+							}
+						}
+						```
+
+						---
+
+						## Conflate
+
+						<img src="img/conflate.png">
+
+						---
+
+						## Conflate
+
+						```java
+						sealed interface Result permits Received, Sent {}
+						record Received(String value) implements Result {}
+						record Sent() implements Result {}
+						```
+
+						---
+
+						## Conflate
+
+						```java
+						void conflate(Source<String> from, Sink<Integer> to)
+							throws InterruptedException {
+
+							var soFar = 0;
+							while (true) {
+								...
+							}
+						}
+						```
+
+						---
+
+						## Conflate
+
+						```java [|3-6|8|12-13]
+						Result result;
+						if (soFar > 0) {
+							result = select(
+								to.sendClause(soFar, Sent::new),
+								from.receiveClause(Received::new)
+							);
+						} else {
+							result = new Received(from.receive());
+						}
+
+						switch(result) {
+							case Received r -> soFar += r.value.length();
+							case Sent s     -> soFar  = 0;
+						}
+						```
+
+						---
+
+						## Backpressure
+
+						Just don't receive*
+
+						(*) watch out for the implicit thread queues
+						<!-- .element: style="font-size: small" -->
+
+						---
+
+						<img src="img/backpressure.png">
+
+						---
+
+						### Performance
+
+						<img src="img/perf.png" style="height: 400px;">
+
+						14 ns/operation is 70 million ops/second
+
+						---
+
+						### Performance
+
+						<img src="img/perf2.png" style="height: 400px;">
+
+						&nbsp;
+					</textarea>
+				</section>
+
+				<section data-markdown>
+					<textarea data-template>
+						## Higher-level interface?
+
+						First, we need structured concurrency
+
+						---
+
+						### Ox: structured concurrency++ for Scala
+
+						Builds on [JEP 453: Structured Concurrency](https://openjdk.org/jeps/453)
+						* provides betters defaults
+						* a programmer-friendly API
+
+						---
+
+						### Run two computations in parallel
+
+						```scala
+						supervised {        // ① starts a scope
+							val f1 = fork { // ② can only be called within a scope
+								sleep(2.seconds)
+								1
+							}
+
+							val f2 = fork {
+								sleep(1.seconds)
+								2
+							}
+
+							(f1.join(), f2.join()) // ③ block until fork done
+						}
+						// (1, 2)
+						```
+
+						---
+
+						## Mapping a source
+
+						```scala
+						def mapAndPrint(s: Source[String]): Unit =
+						  supervised {
+						    s.map(s => s.length) // ① starts a virtual thread
+						     .foreach(n =>       // ② blocking receives in a loop
+								println(s"Got string of length: $n")
+						  }
+						```
+
+						---
+
+						## More combinators
+
+						```scala
+						supervised {
+						  Source
+						    .unfold(0)(i => Some(i + 1, i + 1))
+						    .throttle(1, 1.second)
+						    .mapPar(4) { i =>
+						      Thread.sleep(5000)
+						      val j = i * 3
+						      j + 1
+						    }
+						    .filter(i => i % 2 == 0)
+						    .zip(Source.unfold(0)(i => Some(i + 1, i + 1)))
+						    .foreach(println)
+						}
+						```
+
+						---
+
+						## Looks familiar?
+
+						```java
+						var system = ActorSystem.create("streams");
+						var delayed = CompletableFuture
+							.delayedExecutor(5L, SECONDS);
+
+						Source.range(1, 100)
+							.throttle(1, Duration.ofSeconds(1))
+							.mapAsync(4, i -> CompletableFuture
+									.supplyAsync(() -> i * 3, delayed)
+									.thenApplyAsync(k -> k + 1))
+							.filter(i -> i % 2 == 0)
+							.zip(Source
+								.unfold(0, i -> Optional.of(Pair.create(i+1, i+1))))
+							.runForeach(System.out::println, system)
+							.toCompletableFuture().get();
+						```
+
+						---
+
+						### Jox/Ox streams through an Akka lens
+
+						* cold vs hot processing
+						* two mapping variants: `.map` and `.mapAsView`
+						* you need to decide
+						  * both a bug, and a feature
+					</textarea>
+				</section>
+
+				<section data-markdown>
+					<textarea data-template>
+						## Summary
+
+						---
+
+						### Vote / leave feedback in the app - thank you!
+
+						---
+
+						<img src="img/sml.png" alt="SoftwareMill logo" style="height: 180px;">
+
+						### Solving the hard problems that our clients face, using software
+						<!-- .element: style="color: #42AFFAFF;" -->
+
+						---
+
+						## What's available now
+
+						* Java 21 w/ virtual threads
+						* [Jox](https://github.com/softwaremill/jox): Fast and Scalable Channels in Java
+						* [Ox](https://github.com/softwaremill/ox): Structured & high-level concurrency and resiliency for Scala
+
+						---
+
+						## Why jox?
+
+						* performance comparable to the state-of-the-art
+						* low memory footprint
+						* feature set inspired by Go channels
+						* based on Kotlin's implementation
+						* Apache2 licensed, available on GitHub
+
+						---
+
+						```java
+						var thankYou = true;
+						```
+						<!-- .element: style="text-align: center; font-size:40px;" -->
+
+						<br />
+
+						* direct-style asynchronous streams are possible
+						* Jox gives us backpressured Go-like channels
+						* Ox allows to avoid explicit concurrency with built-in operations & structured approach
+
+						[https://warski.org](https://warski.org), [@adamwarski](https://x.com/adamwarski)
+					</textarea>
+				</section>
+			</div>
+		</div>
+
+		<script src="dist/reveal.js"></script>
+		<script src="plugin/notes/notes.js"></script>
+		<script src="plugin/markdown/markdown.js"></script>
+		<script src="plugin/highlight/highlight.js"></script>
+		<script>
+			// More info about initialization & config:
+			// - https://revealjs.com/initialization/
+			// - https://revealjs.com/config/
+			Reveal.initialize({
+				hash: true,
+
+				// Learn about plugins: https://revealjs.com/plugins/
+				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+			});
+		</script>
+	</body>
+</html>
