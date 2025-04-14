@@ -755,37 +755,37 @@
 
 						## Java Streams?
 
-<table style="font-size: 28px;">
-  <thead>
-    <tr>
-      <th></th>
-      <th>java streams</th>
-      <th>jox flows</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="background-color: #333333;">
-      <th>model</th>
-      <td>pull<br />iterator</td>
-      <td>push<br />observer</td>
-    </tr>
-    <tr>
-      <th>extensibility</th>
-      <td>gatherers</td>
-      <td>custom <code>FlowStage</code></td>
-    </tr>
-    <tr style="background-color: #333333;">
-      <th>purpose</th>
-      <td>collections<br />for-each</td>
-      <td>asynchronous<br />event-driven/RT</td>
-    </tr>
-    <tr>
-      <th>data</th>
-      <td>bounded</td>
-      <td>infinite</td>
-    </tr>
-  </tbody>
-</table>
+                        <table style="font-size: 28px;">
+                          <thead>
+                            <tr>
+                              <th></th>
+                              <th>java streams</th>
+                              <th>jox flows</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr style="background-color: #333333;">
+                              <th>model</th>
+                              <td>pull<br />iterator</td>
+                              <td>push<br />observer</td>
+                            </tr>
+                            <tr>
+                              <th>extensibility</th>
+                              <td>gatherers</td>
+                              <td>custom <code>FlowStage</code></td>
+                            </tr>
+                            <tr style="background-color: #333333;">
+                              <th>purpose</th>
+                              <td>collections<br />for-each</td>
+                              <td>asynchronous<br />event-driven/RT</td>
+                            </tr>
+                            <tr>
+                              <th>data</th>
+                              <td>bounded</td>
+                              <td>infinite</td>
+                            </tr>
+                          </tbody>
+                        </table>
 
 						Both: lazy, backpressured
 
@@ -851,6 +851,11 @@
 						* Java 21 w/ virtual threads
 						* [Jox](https://github.com/softwaremill/jox): channels, flows, concurrency scopes
 						* Structured Concurrency, [JEP 499 (preview)](https://openjdk.org/jeps/499)
+
+						```java
+						var starOnGitHub = true;
+						```
+						<!-- .element: style="text-align: center; font-size:40px;" -->
 
 						---
 
