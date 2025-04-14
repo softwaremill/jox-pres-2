@@ -5,6 +5,7 @@
 
     <groupId>com.softwaremill.test</groupId>
     <artifactId>jox-pres-2</artifactId>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -16,12 +17,12 @@
     <dependencies>
         <dependency>
             <groupId>com.softwaremill.jox</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>flows</artifactId>
             <version>0.4.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.pekko</groupId>
-            <artifactId>:pekko-stream_2.13</artifactId>
+            <artifactId>pekko-stream_2.13</artifactId>
             <version>1.0.2</version>
         </dependency>
     </dependencies>

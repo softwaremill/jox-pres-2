@@ -81,22 +81,30 @@
 						* of "reactive" streaming libraries
 
 						while keeping the performance?
-						<!-- .element: class="fragment" -->
+						<!-- .element: style="color: #42AFFAFF;" class="fragment" -->
 
 						---
 
-						Who am I?
+						## From Reactive Streams to Virtual Threads
+						<!-- .element: style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;" -->
 
-						TODO
+						### [Adam Warski](https://warski.org), [SoftwareMill](https://softwaremill.com)
+						Tokyo, April 2025
 
-						## Go-like channels for Java using Project Loom
-						<!-- .element: style="color: #42AFFAFF;" -->
+						---
 
-						### [Adam Warski](https://warski.org), [SoftwareMill](https://softwaremill.com), June 2024
+						## Who am I?
+
+						* co-founder of [SoftwareMill](https://softwaremill.com), R&D
+						* software engineer: distributed systems, functional programming
+						* [blogger](https://warski.org/articles/)
+						* technologies: Java, Scala, Kafka, messaging, event sourcing
+						* [OSS](https://warski.org/projects/): sttp client, Tapir, Hibernate Envers, Jox & more
 
 						---
 
 						<h2 class="r-fit-text">Part I: Virtual Threads</h2>
+						<!-- .element: style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;" -->
 
 						---
 
@@ -218,9 +226,13 @@
 						* API: virtual & platform threads
 						* retrofitting blocking APIs
 
+						Blocking is once again completely fine!
+						<!-- .element: style="color: #42AFFAFF;" class="fragment" -->
+
 						---
 
 						<h2 class="r-fit-text">Part II: Reactive Streams</h2>
+						<!-- .element: style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;" -->
 
 						---
 
@@ -250,7 +262,7 @@
 
 						---
 
-						## Akka streams
+						## Akka/Pekko streams
 
 						```java
 						var delayed =
@@ -280,8 +292,8 @@
 
 						## Reactive Streams & implementations
 
-						* `Publisher` / `Subscriber` - standard
-						* Akka/Pekko Streams, Vert.X, Helidon, RxJava, Reactor - implementations
+						* `Publisher` / `Subscriber`: standard
+						* Akka/Pekko Streams, Vert.X, Helidon, RxJava, Reactor: implementations
 
 						---
 
@@ -293,7 +305,7 @@
 
 						---
 
-						<h2 class="r-fit-text">Part III: Implementing simple streams</h2>
+						<h2 class="r-fit-text" style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;">Part III: Implementing simple streams</h2>
 
 						---
 
@@ -431,7 +443,7 @@
 
 						---
 
-						<h2 class="r-fit-text">Part IV: Asynchronous Infrastructure</h2>
+						<h2 class="r-fit-text" style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;">Part IV: Asynchronous Infrastructure</h2>
 
 						---
 
@@ -499,7 +511,7 @@
 						## Managing threads
 
 						* using structured concurrency
-						* built on top of [JEP-453](https://openjdk.org/jeps/453)
+						* built on top of [JEP-499](https://openjdk.org/jeps/499)
 						  * in preview
 
 						---
@@ -542,6 +554,30 @@
 
 						---
 
+						## Let it crash!
+
+						---
+
+						```java[|6,14]
+						var result = supervised(scope -> {
+							var result = new CompletableFuture<String>();
+
+							var f1 = scope.fork(() -> {
+								Thread.sleep(500);
+								result.complete("Number 1 won!");
+							});
+
+							var f2 = scope.fork(() -> {
+								Thread.sleep(1000);
+								result.complete("Number 2 won!");
+							});
+
+							return result.get();
+						});
+						```
+
+						---
+
 						## Structured concurrency
 
 						Syntactical structure of the code determines the lifetime of threads
@@ -551,7 +587,7 @@
 
 						---
 
-						<h2 class="r-fit-text">Part V: Asynchronous Streams</h2>
+						<h2 class="r-fit-text" style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;">Part V: Asynchronous Streams</h2>
 
 						---
 
@@ -609,429 +645,174 @@
 
 						---
 
-
-
-					</textarea>
-				</section>
-
-				<section data-markdown>
-					<textarea data-template>
-						---
+						## Akka streams
 
 						```java
-						public final class Channel<T> implements Source<T>, Sink<T> {
-							...
-						}
-						```
-
-						---
-
-						```java [1|3-4|5]
-						var ch = new Channel<Integer>(4);
-
-						ch.send(1);
-						ch.send(2);
-						System.out.println(ch.receive());
-						```
-
-						So far, a simple queue
-						<!-- .element: class="fragment" -->
-
-						---
-
-						```java [1-2|4-5|8]
-						var ch1 = new Channel<String>();
-						var ch2 = new Channel<String>();
-
-						Thread.ofVirtual().start(() -> { ch1.send("v1"); });
-						Thread.ofVirtual().start(() -> { ch2.send("v2"); });
-
-						System.out.println(
-						    select(ch1.receiveClause(), ch2.receiveClause())
-						);
-						```
-
-						---
-
-						```java [4-6|7-10]
-						var ch1 = new Channel<Integer>();
-						var ch2 = new Channel<Integer>();
-
-						Thread.ofVirtual().start(() -> { ch1.receive(); });
-						Thread.ofVirtual().start(() -> { ch2.receive(); });
-
-						var sent = select(
-						    ch1.sendClause(13, () -> "first"),
-						    ch2.sendClause(25, () -> "second")
-						);
-
-						System.out.println("Sent: " + sent);
-						```
-
-						---
-
-						```java
-						var ch = new Channel<String>(4);
-
-						ch.send("hello");
-						ch.done();
-
-						System.out.println("Received: " + ch.receiveOrClosed());
-						System.out.println("Received: " + ch.receiveOrClosed());
-						```
-
-						```text
-						Received: hello
-						Received: ChannelDone[]
-						```
-						<!-- .element: class="fragment" -->
-
-						---
-
-						```java
-						var ch = new Channel<String>(4);
-
-						ch.send("hello");
-						ch.error(new RuntimeException("error"));
-
-						System.out.println("Received: " + ch.receiveOrClosed());
-						System.out.println("Received: " + ch.receiveOrClosed());
-						```
-
-						```text
-						Received: ChannelError[cause=RuntimeException: error]
-						Received: ChannelError[cause=RuntimeException: error]
-						```
-						<!-- .element: class="fragment" -->
-					</textarea>
-				</section>
-
-				<section data-markdown>
-					<textarea data-template>
-						## But ... is this useful?
-
-						---
-
-						```java
-						public class WebSocket {
-							String receive()
-								throws IOException, WebSocketClosedException { ... }
-						}
-
-						public class Business {
-							void process(Source<String> s) { ... }
-						}
-						```
-
-						How to funnel a `WebSocket` to a `Channel`?
-
-						---
-
-						## Funnelling: producer
-
-						```java [1-12|5,8,10]
-						void wsToChannel(WebSocket ws, Channel<String> c)
-								throws InterruptedException {
-							try {
-								while (true) {
-									c.send(ws.receive());
-								}
-							} catch (IOException e) {
-								c.error(e);
-							} catch (WebSocketClosedException e) {
-								c.done();
-							}
-						}
-						```
-
-						---
-
-						## Funnelling: consumer
-
-						```java
-						void process(Source<String> s) throws InterruptedException {
-							var run = true;
-							while (run) {
-								switch (s.receiveOrClosed()) {
-									case ChannelDone()             -> { run = false; }
-									case ChannelError(Throwable t) -> { run = false; }
-									case String s -> { Thread.sleep(1000); }
-									default -> throw new IllegalStateException();
-								}
-							}
-						}
-						```
-
-						---
-
-						### Separate data & control channels
-
-						* many stock tickers, received via multiple WSs
-						* single channel to gather the data
-						* another channel to gather control data (WS errors, completion)
-
-						---
-
-						<img src="img/multi_tickers.png">
-
-						---
-
-						## Tickers: producer
-
-						```java [1-14|7,10,12]
-						void wsToChannel(String symbol, WebSocket ws,
-							Channel<String> prices,
-							Channel<TickerWebSocketEvent> control)
-								throws InterruptedException {
-							try {
-								while (true) {
-									prices.send(symbol + ": " + ws.receive());
-								}
-							} catch (IOException e) {
-								control.send(new TickerWebSocketError(symbol));
-							} catch (WebSocketClosedException e) {
-								control.send(new TickerWebSocketDone(symbol));
-							}
-						}
-						```
-
-						---
-
-						## Tickers: consumer
-
-						```java [1-15|5-6]
-						void consume(
-							Channel<String> prices,
-							Channel<TickerWebSocketEvent> control) {
-							while (true) {
-								switch (select(control.receiveClause(),
-											   prices.receiveClause())) {
-									case String p -> { Thread.sleep(1000); }
-									case TickerWebSocketDone d -> { /* ... */ }
-									case TickerWebSocketError e -> {
-										restart(e.symbol(), prices, control);
-									}
-									default -> throw new IllegalStateException();
-								}
-							}
-						}
-						```
-
-						---
-
-						## Conflate
-
-						<img src="img/conflate.png">
-
-						---
-
-						## Conflate
-
-						```java
-						sealed interface Result permits Received, Sent {}
-						record Received(String value) implements Result {}
-						record Sent() implements Result {}
-						```
-
-						---
-
-						## Conflate
-
-						```java
-						void conflate(Source<String> from, Sink<Integer> to)
-							throws InterruptedException {
-
-							var soFar = 0;
-							while (true) {
-								...
-							}
-						}
-						```
-
-						---
-
-						## Conflate
-
-						```java [|3-6|8|12-13]
-						Result result;
-						if (soFar > 0) {
-							result = select(
-								to.sendClause(soFar, Sent::new),
-								from.receiveClause(Received::new)
-							);
-						} else {
-							result = new Received(from.receive());
-						}
-
-						switch(result) {
-							case Received r -> soFar += r.value.length();
-							case Sent s     -> soFar  = 0;
-						}
-						```
-
-						---
-
-						## Backpressure
-
-						Just don't receive*
-
-						(*) watch out for the implicit thread queues
-						<!-- .element: style="font-size: small" -->
-
-						---
-
-						<img src="img/backpressure.png">
-
-						---
-
-						### Performance
-
-						<img src="img/perf.png" style="height: 400px;">
-
-						14 ns/operation is 70 million ops/second
-
-						---
-
-						### Performance
-
-						<img src="img/perf2.png" style="height: 400px;">
-
-						&nbsp;
-					</textarea>
-				</section>
-
-				<section data-markdown>
-					<textarea data-template>
-						## Higher-level interface?
-
-						First, we need structured concurrency
-
-						---
-
-						### Ox: structured concurrency++ for Scala
-
-						Builds on [JEP 453: Structured Concurrency](https://openjdk.org/jeps/453)
-						* provides betters defaults
-						* a programmer-friendly API
-
-						---
-
-						### Run two computations in parallel
-
-						```scala
-						supervised {        // ① starts a scope
-							val f1 = fork { // ② can only be called within a scope
-								sleep(2.seconds)
-								1
-							}
-
-							val f2 = fork {
-								sleep(1.seconds)
-								2
-							}
-
-							(f1.join(), f2.join()) // ③ block until fork done
-						}
-						// (1, 2)
-						```
-
-						---
-
-						## Mapping a source
-
-						```scala
-						def mapAndPrint(s: Source[String]): Unit =
-						  supervised {
-						    s.map(s => s.length) // ① starts a virtual thread
-						     .foreach(n =>       // ② blocking receives in a loop
-								println(s"Got string of length: $n")
-						  }
-						```
-
-						---
-
-						## More combinators
-
-						```scala
-						supervised {
-						  Source
-						    .unfold(0)(i => Some(i + 1, i + 1))
-						    .throttle(1, 1.second)
-						    .mapPar(4) { i =>
-						      Thread.sleep(5000)
-						      val j = i * 3
-						      j + 1
-						    }
-						    .filter(i => i % 2 == 0)
-						    .zip(Source.unfold(0)(i => Some(i + 1, i + 1)))
-						    .foreach(println)
-						}
-						```
-
-						---
-
-						## Looks familiar?
-
-						```java
-						var system = ActorSystem.create("streams");
-						var delayed = CompletableFuture
-							.delayedExecutor(5L, SECONDS);
+						var delayed =
+						  CompletableFuture.delayedExecutor(5L, TimeUnit.SECONDS);
+						var nats =
+						  Source.unfold(0, i -> Optional.of(Pair.create(i+1, i+1)));
 
 						Source.range(1, 100)
-							.throttle(1, Duration.ofSeconds(1))
-							.mapAsync(4, i -> CompletableFuture
-									.supplyAsync(() -> i * 3, delayed)
-									.thenApplyAsync(k -> k + 1))
-							.filter(i -> i % 2 == 0)
-							.zip(Source
-								.unfold(0, i -> Optional.of(Pair.create(i+1, i+1))))
-							.runForeach(System.out::println, system)
-							.toCompletableFuture().get();
+						  .throttle(1, Duration.ofSeconds(1))
+						  .mapAsync(4, i -> CompletableFuture
+						    .supplyAsync(() -> i * 3, delayed)
+						    .thenApplyAsync(k -> k + 1))
+						  .filter(i -> i % 2 == 0)
+						  .zip(nats)
+						  .runForeach(System.out::println, system)
+						  .toCompletableFuture();
 						```
 
 						---
 
-						### Jox/Ox streams through an Akka lens
+						## Jox Flows
 
-						* cold vs hot processing
-						* two mapping variants: `.map` and `.mapAsView`
-						* you need to decide
-						  * both a bug, and a feature
-					</textarea>
-				</section>
+						```java [|4|6|7-9|1-2,12|13]
+						var nats =
+						  Flows.unfold(0, i -> Optional.of(Map.entry(i+1, i+1)));
 
-				<section data-markdown>
-					<textarea data-template>
-						## Summary
+						Flows.range(1, 100, 1)
+						  .throttle(1, Duration.ofSeconds(1))
+						  .mapPar(4, i -> {
+							Thread.sleep(5000);
+							var j = i*3;
+							return j+1;
+						  })
+						  .filter(i -> i % 2 == 0)
+						  .zip(nats)
+						  .runForeach(System.out::println);
+						```
 
 						---
 
-						### Vote / leave feedback in the app - thank you!
+						## Backpressure?
+
+						* limited buffers
+						* thread blocking
 
 						---
 
-						<img src="img/sml.png" alt="SoftwareMill logo" style="height: 180px;">
+						## Error handling?
+
+						* sync: just throw exceptions
+						  * `try-catch-finally`
+						  * `.onError`, `.onComplete` for convenience
+						* async: structured concurrency
+						<!-- .element: class="fragment" -->
+						  * threading == implementation detail
+
+						---
+
+						```java [|2,5|4,7-9]
+						public void runToChannel(UnsupervisedScope scope) {
+						  var channel = Channel.newBufferedChannel(bufferCapacity);
+						  scope.forkUnsupervised(() -> {
+						    try {
+						      last.run(channel::send);
+						      channel.done();
+						    } catch (Throwable e) {
+						      channel.error(e);
+						    }
+						    return null;
+						  });
+						}
+						```
+
+						---
+
+						```java [4-5,9-10,13|3,12]
+						public Flow<T> merge(Flow<T> other) {
+						  return new Flow<>(emit -> {
+							  supervised(scope -> {
+							    Channel<T> c1 = this.runToChannel(scope);
+								Channel<T> c2 = other.runToChannel(scope);
+
+								boolean continueLoop = true;
+								while (continueLoop) {
+								  switch (selectOrClosed(c1.receiveClause(),
+														 c2.receiveClause())) {
+									case ChannelDone _ -> continueLoop = false;
+									case ChannelError e -> throw e.toException();
+									case Object r -> emit.apply((T) r);
+						        }
+						}); }); } }
+						```
+
+						---
+
+						## Performance?
+
+						---
+
+						<img src="img/006-perf1.png">
+
+						---
+
+						<img src="img/007-perf2.png">
+
+						---
+
+						<h2 class="r-fit-text" style="background: linear-gradient(to right, #66C4DD, #58BA47); -webkit-background-clip: text; color: transparent;">Part VI: In Summary</h2>
+
+						---
+
+						## Virtual Threads
+
+						* since Java 21
+						* direct syntax: again
+						* keeping the performance
+
+						---
+
+						## Structured Concurrency
+
+						* code structure -> lifetime of threads
+						* no "thread leaks"
+						* threading: an implementation detail
+
+						---
+
+						## Jox Flows
+
+						* powerful, familiar API
+						* Java's control flow
+						* no `Future` virality
+						* lazy evaluation model
+						* sync & async
+
+						---
+
+						## Reactive Streams
+
+						* interoperability!
+						* but: programmer-friendly APIs also possible on top of VTs
+						* RS-based libraries: still have an edge
+						  * maturity
+						  * integrations
+
+						---
+
+						### Virtual Threads: the ultimate validation of Reactive Streams!
+
+						---
+
+						<img src="img/sml.png" alt="SoftwareMill logo" style="height: 180px;"><img src="img/vl.png" alt="VirtusLab logo" style="height: 180px;">
 
 						### Solving the hard problems that our clients face, using software
 						<!-- .element: style="color: #42AFFAFF;" -->
 
 						---
 
-						## What's available now
-
-						* Java 21 w/ virtual threads
-						* [Jox](https://github.com/softwaremill/jox): Fast and Scalable Channels in Java
-						* [Ox](https://github.com/softwaremill/ox): Structured & high-level concurrency and resiliency for Scala
+						<img src="img/ulotka.png">
 
 						---
 
-						## Why jox?
+						## What's available now
 
-						* performance comparable to the state-of-the-art
-						* low memory footprint
-						* feature set inspired by Go channels
-						* based on Kotlin's implementation
-						* Apache2 licensed, available on GitHub
+						* Java 21 w/ virtual threads
+						* [Jox](https://github.com/softwaremill/jox): channels, flows, concurrency scopes
+						* Structured Concurrency, [JEP 499 (preview)](https://openjdk.org/jeps/499)
 
 						---
 
@@ -1040,13 +821,11 @@
 						```
 						<!-- .element: style="text-align: center; font-size:40px;" -->
 
+						[https://warski.org](https://warski.org)
+
 						<br />
 
-						* direct-style asynchronous streams are possible
-						* Jox gives us backpressured Go-like channels
-						* Ox allows to avoid explicit concurrency with built-in operations & structured approach
-
-						[https://warski.org](https://warski.org), [@adamwarski](https://x.com/adamwarski)
+						[X: @adamwarski](https://x.com/adamwarski) | [BlueSky: warski.org](https://bsky.app/profile/warski.org) | [LinkedIn](https://www.linkedin.com/in/adamwarski/)
 					</textarea>
 				</section>
 			</div>
