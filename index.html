@@ -122,20 +122,6 @@
 
 						---
 
-						## Before Loom: Scaling threads
-
-						Core idea: make sure threads are never idle
-
-						<div class="fragment">
-
-						* thread pools
-						* `Executor`
-						* `Future`, `CompletableFuture`
-
-						</div>
-
-						---
-
 						## In the old days
 
 						```java
@@ -412,23 +398,17 @@
 						## Stages & emits
 
 						```java
+						public class Flow<T> {
+							final FlowStage<T> last;
+							// ...
+						}
+
 						public interface FlowStage<T> {
 							void run(FlowEmit<T> emit) throws Exception;
 						}
 
 						public interface FlowEmit<T> {
 							void apply(T t) throws Exception;
-						}
-						```
-
-						---
-
-						## Top-level flow
-
-						```java
-						public class Flow<T> {
-							final FlowStage<T> last;
-							// ...
 						}
 						```
 
